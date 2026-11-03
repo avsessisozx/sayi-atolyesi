@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Sayı Atölyesi</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:system-ui,sans-serif;background:#f4f1ea;color:#222;min-height:100vh}
+#app{max-width:480px;margin:0 auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:100vh}
+h1{margin:6px 0;font-size:26px}
+button{font:inherit;border:0;border-radius:14px;padding:14px 18px;background:#2b6cb0;color:#fff;font-weight:600;font-size:18px}
+button.alt{background:#dd6b20}button.gray{background:#cbd5e0;color:#222}button.green{background:#2f855a}
+button:active{transform:scale(.97)}
+.row{display:flex;gap:10px}.row>*{flex:1}
+input{font:inherit;font-size:22px;padding:12px;width:100%;border-radius:12px;border:2px solid #cbd5e0;text-align:center}
+#msg{background:#fff;border-radius:14px;padding:14px;font-size:20px;white-space:pre-line;min-height:84px;line-height:1.4}
+#scene{background:#fff;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.line{display:flex;align-items:center;gap:10px;min-height:64px;flex-wrap:wrap;padding:6px;border-radius:10px}
+.line.hl{background:#fefcbf}.line .lab{font-weight:700;font-size:20px;min-width:44px}
+.tens{display:flex;gap:5px;flex-wrap:wrap}
+.bar{width:16px;height:64px;border-radius:4px;background:repeating-linear-gradient(#2b6cb0 0 5.4px,#fff 5.4px 6.4px)}
+.ones{display:grid;grid-template-columns:repeat(5,15px);gap:4px}
+.dot{width:15px;height:15px;border-radius:50%;background:#dd6b20}
+.flash{animation:fl .8s}@keyframes fl{0%{transform:scale(1.8);filter:brightness(1.4)}100%{transform:none}}
+.sum{background:#e6fffa}
+#grid{display:grid;gap:5px;justify-content:start}
+.g{width:var(--s);height:var(--s);border-radius:50%;background:#2b6cb0}
+.g.o{background:#dd6b20}.g.dim{opacity:.18}.g.on{outline:3px solid #ecc94b}
+.gr{display:flex;align-items:center;gap:10px}.tot{font-weight:700;font-size:18px;color:#2f855a;min-width:40px}
+#pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+#pad button{padding:12px;font-size:22px}
+#ans{font-size:34px;text-align:center;background:#fff;border-radius:12px;padding:8px;min-height:56px;font-weight:700}
+.small{font-size:14px;color:#555}
+</style></head><body><div id="app"></div>
+<script>
+const VER='0.1.0',LOGS=[],$=s=>document.querySelector(s);
+function act(m){LOGS.push(new Date().toTimeString().slice(0,8)+' '+m);if(LOGS.length>80)LOGS.shift()}
+addEventListener('error',e=>act('HATA: '+e.message+' @'+String(e.filename||'').split('/').pop()+':'+e.lineno));
+addEventListener('unhandledrejection',e=>act('HATA(promise): '+e.reason));
+let VIEW='home';
+const app=$('#app'), sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let AC; const SC=[0,2,4,7,9,12,14,16,19,21,24,26,28,31,33,36];
+function tone(i,d=.2){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();
+ const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=262*Math.pow(2,SC[Math.min(i,SC.length-1)]/12);
+ g.gain.setValueAtTime(.25,AC.currentTime);g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);
+ o.connect(g);g.connect(AC.destination);o.start();o.stop(AC.currentTime+d)}catch(e){}}
+function say(t){try{if(window.Android&&Android.canSpeak&&Android.canSpeak()){Android.speak(t);return}speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='tr-TR';u.rate=.9;speechSynthesis.speak(u)}catch(e){}}
+async function melody(n){for(let i=0;i<n;i++){tone(i);await sleep(160)}}
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v|0));
+
+/* ---------- ANA EKRAN ---------- */
+function home(){VIEW='home';act('ana ekran');
+ app.innerHTML=`<h1>🔢 Sayı Atölyesi</h1>
+ <div class="small">Soru yok, puan yok. Önce nasıl yapıldığını görürsün, istersen sonra sen yaparsın.</div>
+ <div class="row"><button id="m1">➕ Toplama</button><button id="m2" class="alt">✖️ Çarpma</button></div>
+ <button id="rp" class="gray">🐞 Hata raporu</button><div class="small">v${VER}</div>`;
+ $('#rp').onclick=report;$('#m1').onclick=()=>setup('add');$('#m2').onclick=()=>setup('mul');
+}
+function setup(mode){VIEW='setup';act('sayı seçimi: '+mode);
+ const add=mode==='add';
+ app.innerHTML=`<h1>${add?'➕ Toplama':'✖️ Çarpma'}</h1>
+ <div class="small">${add?'İki sayı seç (1-99)':'İki sayı seç (1-12). Birincisi sütun, ikincisi satır.'}</div>
+ <div class="row"><input id="a" type="number" inputmode="numeric" value="${add?27:7}"><input id="b" type="number" inputmode="numeric" value="${add?35:8}"></div>
+ <button id="r" class="gray">🎲 Rastgele sayı</button>
+ <div class="row"><button id="w" class="green">👀 İzle</button><button id="p">✋ Sen yap</button></div>
+ <button id="h" class="gray">← Geri</button>`;
+ const mx=add?99:12;
+ $('#r').onclick=()=>{$('#a').value=rnd(add?11:2,mx);$('#b').value=rnd(add?11:2,mx)};
+ const go=pr=>{const a=clamp($('#a').value,1,mx),b=clamp($('#b').value,1,mx);run(mode,a,b,pr)};
+ $('#w').onclick=()=>go(false);$('#p').onclick=()=>go(true);$('#h').onclick=home;
+}
+
+/* ---------- ADIMLAR ---------- */
+function addSteps(a,b){
+ const ta=a/10|0,oa=a%10,tb=b/10|0,ob=b%10,S=[];
+ S.push({t:`${a} = ${ta} onluk + ${oa} birlik\n${b} = ${tb} onluk + ${ob} birlik`,r:[0,0],n:0});
+ S.push({t:`Önce onlukları topla:\n${ta} onluk + ${tb} onluk = ${ta+tb} onluk`,q:[`${ta} onluk + ${tb} onluk kaç onluk eder?`,ta+tb],r:[ta+tb,0],n:ta+tb,hl:'t'});
+ S.push({t:`Şimdi birlikleri topla:\n${oa} + ${ob} = ${oa+ob}`,q:[`${oa} birlik + ${ob} birlik kaç birlik eder?`,oa+ob],r:[ta+tb,oa+ob],n:oa+ob,hl:'o'});
+ let rb=ta+tb,ro=oa+ob;
+ if(ro>=10){rb++;ro-=10;S.push({t:`10 birlik = 1 onluk!\nOnluğa çevirdik.`,r:[rb,ro],n:1,flash:true})}
+ S.push({t:`${rb} onluk ${ro} birlik\n= ${a+b}`,r:[rb,ro],n:0,done:true,sayEnd:`${a} artı ${b} eşittir ${a+b}`});
+ return S;
+}
+function mulSteps(a,b){
+ const S=[];
+ S.push({t:`${a} × ${b}\n${a} sütun, ${b} satır.\nHer satırda ${a} tane var.`});
+ S.push({t:`Satır satır sayalım,\nher satır ${a}:`,skip:true});
+ if(a>5){
+  const L=5*b,R=(a-5)*b;
+  S.push({t:`Kolay parçalara bölelim:\n5 sütun + ${a-5} sütun`,split:true});
+  S.push({t:`Mavi parça: 5 × ${b} = ${L}`,q:[`5 × ${b} kaç eder? (beşer beşer say)`,L],split:true,part:'L'});
+  S.push({t:`Turuncu parça: ${a-5} × ${b} = ${R}`,q:[`${a-5} × ${b} kaç eder?`,R],split:true,part:'R'});
+  S.push({t:`${L} + ${R} = ${a*b}\n\n${a} × ${b} = ${a*b}`,q:[`${L} + ${R} kaç eder?`,a*b],split:true,done:true,sayEnd:`${a} çarpı ${b} eşittir ${a*b}`});
+ } else S.push({t:`${a} × ${b} = ${a*b}`,q:[`${a} × ${b} kaç eder?`,a*b],done:true,sayEnd:`${a} çarpı ${b} eşittir ${a*b}`});
+ return S;
+}
+
+/* ---------- SAHNE ---------- */
+const blocks=(t,o,c='')=>`<div class="tens ${c}">${'<div class="bar"></div>'.repeat(t)}</div><div class="ones ${c}">${'<div class="dot"></div>'.repeat(o)}</div>`;
+function sceneAdd(a,b,st){
+ const ta=a/10|0,oa=a%10,tb=b/10|0,ob=b%10,r=st.r||[0,0];
+ const hT=st.hl==='t',hO=st.hl==='o';
+ return `<div class="line ${hT||hO?'hl':''}"><span class="lab">${a}</span>${blocks(ta,oa)}</div>
+ <div class="line ${hT||hO?'hl':''}"><span class="lab">+${b}</span>${blocks(tb,ob)}</div>
+ <div class="line sum"><span class="lab">=</span>${blocks(r[0],r[1],st.flash?'flash':'')}</div>`;
+}
+function gridHTML(a,b,st,tot){
+ const s=Math.min(26,Math.floor(300/a)-5);
+ let h=`<div id="grid" style="--s:${s}px">`;
+ for(let y=0;y<b;y++){h+=`<div class="gr"><div style="display:flex;gap:5px">`;
+  for(let x=0;x<a;x++){let c='g';if(st.split&&x>=5)c+=' o';
+   if(st.part==='L'&&x>=5)c+=' dim';if(st.part==='R'&&x<5)c+=' dim';h+=`<div class="${c}" data-y="${y}"></div>`}
+  h+=`</div><span class="tot" data-t="${y}">${tot&&tot>y?(y+1)*a:''}</span></div>`}
+ return h+'</div>';
+}
+
+/* ---------- AKIŞ ---------- */
+let ST;
+function run(mode,a,b,practice){VIEW='run';act(`başla ${mode} ${a},${b} sen-yap=${practice}`);
+ ST={mode,a,b,practice,steps:mode==='add'?addSteps(a,b):mulSteps(a,b),i:-1,busy:false};
+ app.innerHTML=`<div class="row"><button class="gray" id="back">←</button><button class="gray" id="rep">🔁 Tekrar</button></div>
+ <div id="msg"></div><div id="scene"></div><div id="ctl"></div>`;
+ $('#back').onclick=()=>setup(mode);$('#rep').onclick=()=>{if(!ST.busy)show(ST.i,true)};
+ next();
+}
+function next(){ST.i++;const s=ST.steps[ST.i];if(!s){setup(ST.mode);return}
+ if(ST.practice&&s.q)ask(s);else show(ST.i,false)}
+function ctl(done){
+ $('#ctl').innerHTML=done?`<div class="row"><button id="again" class="gray">Başka sayı</button><button id="same" class="green">Baştan</button></div>`
+  :`<button id="nx">Devam ▶</button>`;
+ if(done){$('#again').onclick=()=>setup(ST.mode);$('#same').onclick=()=>run(ST.mode,ST.a,ST.b,ST.practice)}
+ else $('#nx').onclick=()=>{if(!ST.busy)next()};
+}
+async function show(i,replay){
+ const s=ST.steps[i];ST.busy=true;act('adım '+i+': '+s.t.split('\n')[0]);
+ $('#msg').textContent=s.t;
+ $('#ctl').innerHTML='';
+ if(ST.mode==='add'){
+  const prev=ST.steps[i-1]; // önceki halden göster, sonra yenisini aç
+  $('#scene').innerHTML=sceneAdd(ST.a,ST.b,s);
+ } else {
+  $('#scene').innerHTML=gridHTML(ST.a,ST.b,s,0);
+ }
+ say(s.sayEnd||s.t.replace(/\n+/g,'. ').replace(/×/g,' çarpı ').replace(/\+/g,' artı ').replace(/=/g,' eşittir '));
+ if(ST.mode==='add'&&s.n)melody(Math.min(s.n,15));
+ if(s.skip){await sleep(1200);
+  for(let y=0;y<ST.b;y++){
+   document.querySelectorAll(`.g[data-y="${y}"]`).forEach(e=>e.classList.add('on'));
+   document.querySelector(`[data-t="${y}"]`).textContent=(y+1)*ST.a;tone(y);await sleep(550)}
+ }
+ if(s.part){await melody(5);}
+ ST.busy=false;ctl(!!s.done);
+}
+function ask(s){act('soru: '+s.q[0]+' (doğru='+s.q[1]+')');
+ ST.busy=false;let v='';
+ $('#msg').textContent=s.q[0];
+ const prev=ST.steps[ST.i-1]||{};
+ $('#scene').innerHTML=ST.mode==='add'?sceneAdd(ST.a,ST.b,{...prev,hl:s.hl}):gridHTML(ST.a,ST.b,s,0);
+ say(s.q[0].replace(/×/g,' çarpı ').replace(/\+/g,' artı '));
+ let tries=0;
+ $('#ctl').innerHTML=`<div id="ans">&nbsp;</div><div id="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}" class="gray">${n}</button>`).join('')}
+  <button data-k="d" class="gray">⌫</button><button data-k="0" class="gray">0</button><button data-k="ok" class="green">Tamam</button></div>
+  <button id="show" class="alt">🙈 Bilmiyorum, göster</button>`;
+ const upd=()=>{const e=$('#ans');if(e)e.innerHTML=v||'&nbsp;'};
+ document.querySelectorAll('#pad button').forEach(bt=>bt.onclick=()=>{const k=bt.dataset.k;
+  if(k==='d')v=v.slice(0,-1);else if(k==='ok'){
+   if(+v===s.q[1]){tone(7);show(ST.i,false)}
+   else{tries++;act('yanlış cevap '+v);v='';$('#msg').textContent=tries>1?'Olsun, birlikte bakalım 👇':'Tam olmadı. Bir daha dene, ya da "göster"e bas.';tone(0,.4);if(tries>1)show(ST.i,false)}
+  }else if(v.length<4)v+=k;upd()});
+ $('#show').onclick=()=>show(ST.i,false);
+}
+const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function report(){VIEW='report';
+ const A=window.Android,info=A&&A.info?A.info():'tarayıcı',tts=A&&A.canSpeak?(A.canSpeak()?'Türkçe ses var':'Türkçe ses YOK'):'tarayıcı sesi';
+ const txt=`Sayı Atölyesi v${VER}\n${info}\nSes: ${tts}\nUA: ${navigator.userAgent}\n--- kayıt ---\n${LOGS.join('\n')}`;
+ app.innerHTML=`<h1>🐞 Hata raporu</h1><div class="small">Bir sorun olursa "Kopyala"ya bas, bana yapıştır.</div>
+ <textarea id="rt" readonly style="width:100%;height:50vh;font-size:13px">${esc(txt)}</textarea>
+ <div class="row"><button id="cp" class="green">📋 Kopyala</button><button id="bk" class="gray">← Geri</button></div>`;
+ $('#bk').onclick=home;
+ $('#cp').onclick=()=>{try{if(A&&A.copy)A.copy(txt);else if(navigator.clipboard)navigator.clipboard.writeText(txt);else{$('#rt').select();document.execCommand('copy')}$('#cp').textContent='✅ Kopyalandı'}catch(e){$('#cp').textContent='Kopyalanamadı, metne uzun bas'}};
+}
+window.onBack=()=>{if(VIEW==='home')return false;if(VIEW==='run'){setup(ST.mode);return true}home();return true};
+home();
+</script></body></html>

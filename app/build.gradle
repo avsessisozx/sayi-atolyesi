@@ -1,0 +1,24 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.avsessisozx.sayiatolyesi'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.avsessisozx.sayiatolyesi'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+    }
+    signingConfigs {
+        release {
+            if (System.getenv('KS_PATH')) {
+                storeFile file(System.getenv('KS_PATH'))
+                storePassword System.getenv('KS_PASS')
+                keyAlias 'sayi'
+                keyPassword System.getenv('KS_PASS')
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
